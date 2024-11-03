@@ -21,6 +21,23 @@ app = Client(
 )
 
 
+def tr_to_en(text):
+   tr_chars = {
+       "ı": "i", "İ": "I",
+       "ğ": "g", "Ğ": "G",
+       "ü": "u", "Ü": "U",
+       "ş": "s", "Ş": "S",
+       "ö": "o", "Ö": "O",
+       "ç": "c", "Ç": "C",
+       "â": "a", "Â": "A",
+       "î": "i", "Î": "I",
+       "û": "u", "Û": "U"
+   }
+   for tr_char, en_char in tr_chars.items():
+       text = text.replace(tr_char, en_char)
+   return text
+
+
 def check_username_pattern(username, full_name):
     pattern = r"^[A-Za-z]+_[A-Za-z0-9]+$"
     if not match(pattern, username):
@@ -29,7 +46,7 @@ def check_username_pattern(username, full_name):
     username_prefix = username.lower().split("_")[0]
     first_name = full_name.lower().split()[0]
     
-    return first_name == username_prefix
+    return tr_to_en(first_name) == username_prefix
 
 
 def check_double_emoji_at_end(name):
