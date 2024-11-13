@@ -76,7 +76,7 @@ async def ban_suspicious_users(client, chat_member):
         username = user.username
         full_name = user.full_name
         
-        if username and check_username_pattern(username, full_name) and check_double_emoji_at_end(full_name):
+        if username and check_username_pattern(username, full_name): # and check_double_emoji_at_end(full_name):
             try:
                 await client.ban_chat_member(
                     chat_id=chat_member.chat.id,
