@@ -8,10 +8,13 @@ from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 from configparser import ConfigParser
 
+from database import Database
+
 
 config = ConfigParser()
 config.read("config.ini")
 
+db = Database()
 
 app = Client(
     "my_bot",
@@ -75,6 +78,9 @@ async def ban_suspicious_users(client, chat_member):
         user = chat_member.new_chat_member.user
         username = user.username
         full_name = user.full_name
+    
+        if db.is_user_unbanned(user.id, chat_id):
+            return
         
         if username and check_username_pattern(username, full_name): # and check_double_emoji_at_end(full_name):
             try:
@@ -116,6 +122,9 @@ async def handle_unban(client, callback_query):
         
         if has_rights:
             await client.unban_chat_member(chat_id, user_id)
+            
+            db.add_to_unbanned(user_id, chat_id)
+            
             unban_message = f"""
 **Ban Kaldırıldı**
 **Kullanıcı ID:** `{user_id}`
