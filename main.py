@@ -78,6 +78,7 @@ async def ban_suspicious_users(client, chat_member):
         user = chat_member.new_chat_member.user
         username = user.username
         full_name = user.full_name
+        chat_id = chat_member.chat.id
     
         if db.is_user_unbanned(user.id, chat_id):
             return
