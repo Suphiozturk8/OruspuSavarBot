@@ -1,5 +1,5 @@
 
-from re import match
+from re import match, search
 from emoji import is_emoji
 
 from pyrogram import Client, filters, enums
@@ -64,6 +64,10 @@ def check_double_emoji_at_end(name):
     return False
 
 
+def contains_arabic(text):
+    return bool(search(r"[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]+", text))
+
+
 async def check_admin_rights(chat_id, user_id):
     member = await app.get_chat_member(chat_id, user_id)
     if member.status in [ChatMemberStatus.OWNER, ChatMemberStatus.ADMINISTRATOR]:
@@ -83,7 +87,25 @@ async def ban_suspicious_users(client, chat_member):
         if db.is_user_unbanned(user.id, chat_id):
             return
         
+        ban_message = None
+        
+        if db.is_arabic_ban_enabled(chat_id):
+            if contains_arabic(full_name):
+                ban_message = f"""
+    **Kullanıcı ismi Arapça karakter içerdiği için banlandı.**
+    **Kullanıcı:** {user.mention}
+    **ID:** `{user.id}`
+                """
+
         if username and check_username_pattern(username, full_name): # and check_double_emoji_at_end(full_name):
+            ban_message = f"""
+    **Şüpheli Kullanıcı Banlandı**
+    **Kullanıcı:** @{username}
+    **İsim:** {full_name}
+    **ID:** `{user.id}`
+            """
+
+        if ban_message:
             try:
                 await client.ban_chat_member(
                     chat_id=chat_member.chat.id,
@@ -97,15 +119,9 @@ async def ban_suspicious_users(client, chat_member):
                     )]
                 ])
                 
-                ban_message = f"""
-    **Şüpheli Kullanıcı Banlandı**
-    **Kullanıcı:** @{username}
-    **İsim:** {full_name}
-    **ID:** `{user.id}`
-    """
                 await client.send_message(
-                    chat_member.chat.id,
-                    ban_message,
+                    chat_id=chat_member.chat.id,
+                    text=ban_message,
                     reply_markup=unban_button
                 )
                 
@@ -119,28 +135,38 @@ async def handle_unban(client, callback_query):
         user_id = int(callback_query.data.split("_")[1])
         chat_id = callback_query.message.chat.id
         
-        has_rights = await check_admin_rights(chat_id, callback_query.from_user.id)
+        if not await check_admin_rights(chat_id, callback_query.from_user.id):
+            return await callback_query.answer(
+                "Bu işlem için admin olmanız ve üyeleri banlama/banını kaldırma yetkinizin olması gerekiyor!",
+                show_alert=True
+            )
+
+        await client.unban_chat_member(chat_id, user_id)
         
-        if has_rights:
-            await client.unban_chat_member(chat_id, user_id)
-            
-            db.add_to_unbanned(user_id, chat_id)
-            
-            unban_message = f"""
+        db.add_to_unbanned(user_id, chat_id)
+        
+        unban_message = f"""
 **Ban Kaldırıldı**
 **Kullanıcı ID:** `{user_id}`
 **İşlemi Yapan Admin:** {callback_query.from_user.mention}
 """
-            await callback_query.message.edit_text(unban_message)
-            await callback_query.answer("Kullanıcının banı kaldırıldı!")
-        else:
-            await callback_query.answer(
-                "Bu işlem için admin olmanız ve üyeleri banlama/banını kaldırma yetkinizin olması gerekiyor!",
-                show_alert=True
-            )
-            
+        await callback_query.message.edit_text(unban_message)
+        await callback_query.answer("Kullanıcının banı kaldırıldı!")
     except Exception as e:
         await callback_query.answer(f"Hata oluştu: {str(e)}", show_alert=True)
+
+
+@app.on_message(filters.command("noodle") & filters.group)
+async def toggle_arabic_ban(client, message):
+    if not await check_admin_rights(message.chat.id, message.from_user.id):
+        return await message.reply(
+            "Bu işlem için admin olmanız ve üyeleri banlama/banını kaldırma yetkinizin olması gerekiyor!"
+        )
+    current = db.is_arabic_ban_enabled(message.chat.id)
+    new_value = "off" if current else "on"
+    db.set_arabic_ban(message.chat.id, new_value)
+    durum = "aktif" if new_value == "on" else "pasif"
+    await message.reply(f"Arapça karakter kontrolü artık **{durum}**.")
 
 
 def get_start_button():
@@ -163,6 +189,7 @@ Merhaba {message.from_user.mention}!
 Özelliklerim:
 - O*uspu kullanıcı adı formatına sahip hesapları tespit ederim
 - O*uspu hesapları otomatik olarak banlarım
+- Arapça karakter içeren isimleri banlama seçeneğim var (aktifleştirmek için /noodle (sadece gruplarda çalışır.) komutunu kullanın.)
 - Adminlere ban kaldırma olanağı veririm
 
 Grubunuzu o*uspulardan uzak tutmak için beni grubunuza ekleyebilir ve admin yapabilirsiniz!
